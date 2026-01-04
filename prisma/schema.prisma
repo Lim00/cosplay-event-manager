@@ -1,0 +1,25 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 입장 로그 테이블 (엑셀 시트라고 생각하세요)
+model EntryLog {
+  id        Int      @id @default(autoincrement()) // 고유 번호
+  visitor   String   // 방문자 이름
+  timestamp DateTime @default(now()) // 입장 시간
+}
+
+// 재고 관리용 상품 모델
+model Goods {
+  id        Int     @id @default(autoincrement())
+  name      String  // 상품명 (예: 아크릴 키링)
+  price     Int     // 가격 
+  stock     Int     @default(0) // 현재 재고 (기본값 0)
+}
