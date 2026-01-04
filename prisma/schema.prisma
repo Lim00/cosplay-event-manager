@@ -22,4 +22,16 @@ model Goods {
   name      String  // 상품명 (예: 아크릴 키링)
   price     Int     // 가격 
   stock     Int     @default(0) // 현재 재고 (기본값 0)
+  history   History[]   // 👈 [New] 1:N 관계 설정 (하나의 상품엔 여러 기록이 있다)
+}
+
+// [New] 입출고 기록 테이블
+model History {
+  id        Int     @id @default(autoincrement())
+  goodsId   Int     // 어떤 상품인가? (Foreign Key)
+  change    Int     // 얼마만큼 변했나? (+1, -1, etc..)
+  reason    String  // 사유 (판매, 입고, 반품 등)
+  timestamp DateTime  @default(now())
+
+  goods     Goods   @relation(fields: [goodsId], references: [id])
 }
