@@ -16,12 +16,27 @@ model EntryLog {
   timestamp DateTime @default(now()) // 입장 시간
 }
 
+model User {
+  id        Int     @id @default(autoincrement())
+  email     String  @unique // 아이디로 사용
+  password  String  // 암호화된 비밀번호
+  name      String?
+
+  // 유저가 가진 상품들 (1:N)
+  goods    Goods[]
+}
+
 // 재고 관리용 상품 모델
 model Goods {
   id        Int     @id @default(autoincrement())
   name      String  // 상품명 (예: 아크릴 키링)
   price     Int     // 가격 
   stock     Int     @default(0) // 현재 재고 (기본값 0)
+  
+  // [New] 주인 정보 추가
+  ownerId   Int     // 누가 주인인지 (Foreign Key)
+  owner     User    @relation(fields: [ownerId], references: [id])
+  
   history   History[]   // 👈 [New] 1:N 관계 설정 (하나의 상품엔 여러 기록이 있다)
 }
 

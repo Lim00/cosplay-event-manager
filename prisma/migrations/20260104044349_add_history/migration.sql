@@ -1,0 +1,9 @@
+-- CreateTable
+CREATE TABLE "History" (
+    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "goodsId" INTEGER NOT NULL,
+    "change" INTEGER NOT NULL,
+    "reason" TEXT NOT NULL,
+    "timestamp" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "History_goodsId_fkey" FOREIGN KEY ("goodsId") REFERENCES "Goods" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
+);
