@@ -30,25 +30,6 @@ export async function updateStock(id: number, change: number, reason: string) {
     // Tip 2: prisma.history.create(...)를 써서 로그를 남겨야 함.
     // Tip 3 (고급): 두 작업은 동시에 성공하거나 동시에 실패해야 함 (Transaction).
     
-    // ---------------------------------------------------------
-    // await prisma.goods.update({
-    //     where: { id },
-    //     data: {
-    //         stock: {
-    //             increment: change,
-    //         },
-    //     },
-    // });
-
-    // await prisma.history.create ({
-    //     data: { 
-    //         goodsId: id,
-    //         change: change,
-    //         reason: reason,
-    //         // goods: prisma.goods.findFirst({where: { id }}),
-    //      },
-    // });
-
     await prisma.$transaction([
 
         prisma.goods.update({

@@ -1,52 +1,70 @@
 // prisma/schema.prisma
 
 generator client {
-  provider = "prisma-client-js"
+  provider  = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider  = "sqlite" // 개발용 (향후 postgresql로 변경)
+  url       = "file:./dev.db"
 }
 
-// 입장 로그 테이블 (엑셀 시트라고 생각하세요)
-model EntryLog {
-  id        Int      @id @default(autoincrement()) // 고유 번호
-  visitor   String   // 방문자 이름
-  timestamp DateTime @default(now()) // 입장 시간
+// 1.NextAuth 필수 모델 (유저, 계정, 세션)
+model Account {
+  id                  String @id @default(cuid())
+  userId              String
+  type                String  
+  provider            String
+  providerAccountId   String
+  referesh_token      String?
+  access_token        String?
+  expires_at          Int?
+  token_type          String?
+  scope               String?
+  id_token            String?
+  session_state       String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model User {
-  id        Int     @id @default(autoincrement())
-  email     String  @unique // 아이디로 사용
-  password  String  // 암호화된 비밀번호
-  name      String?
-
-  // 유저가 가진 상품들 (1:N)
-  goods    Goods[]
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  accounts      Account[]
+  sessions      Session[]
+  
+  // 2. 나중에 추가할 백업 데이터 (JSON 형태로 통째로 저장)
+  backups       Backup[]
 }
 
-// 재고 관리용 상품 모델
-model Goods {
-  id        Int     @id @default(autoincrement())
-  name      String  // 상품명 (예: 아크릴 키링)
-  price     Int     // 가격 
-  stock     Int     @default(0) // 현재 재고 (기본값 0)
-  
-  // [New] 주인 정보 추가
-  ownerId   Int     // 누가 주인인지 (Foreign Key)
-  owner     User    @relation(fields: [ownerId], references: [id])
-  
-  history   History[]   // 👈 [New] 1:N 관계 설정 (하나의 상품엔 여러 기록이 있다)
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
 }
 
-// [New] 입출고 기록 테이블
-model History {
-  id        Int     @id @default(autoincrement())
-  goodsId   Int     // 어떤 상품인가? (Foreign Key)
-  change    Int     // 얼마만큼 변했나? (+1, -1, etc..)
-  reason    String  // 사유 (판매, 입고, 반품 등)
-  timestamp DateTime  @default(now())
-
-  goods     Goods   @relation(fields: [goodsId], references: [id])
+// 3. 백업 데이터 저장소
+model Backup {
+  id        String   @id @default(cuid())
+  userId    String
+  data      String   // Dexie.js 데이터를 JSON 문자열로 저장
+  createdAt DateTime @default(now())
+  
+  user      User     @relation(fields: [userId], references: [id])
 }
