@@ -10,5 +10,5 @@ export default function LogoutButton() {
         >
             로그아웃
         </button>
-    )
+    );
 }

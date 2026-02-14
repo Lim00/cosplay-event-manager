@@ -1,38 +1,194 @@
-import { getServerSession } from "next-auth";
-import { authOptions } from "../api/auth/[...nextauth]/route"; // 아까 export한 설정 가져오기
-import { redirect } from "next/navigation";
-import LogoutButton from "@/components/LogoutButton";
+"use client";
 
-export default async function DashboardPage() {
-  // 1. 서버 세션 확인
-  const session = await getServerSession(authOptions);
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { resetDatabase } from "@/lib/seed";
+import { db, Product } from "@/lib/db"; // DB 연동
+import ProductList from "@/components/ProductList";
 
-  // 2. 로그인 안 했으면 메인으로 쫓아내기
-  if (!session) {
-    redirect("/");
-  }
+// 장바구니 아이템 타입 정의
+interface CartItem extends Product {
+  cartQty: number; // 장바구니에 담긴 개수
+}
+
+export default function DashboardPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  // 1. 장바구니 상태 (State)
+  const [cart, setCart] = useState<CartItem[]>([]);
+
+  useEffect(() => {
+    if (status === "unauthenticated") router.push("/");
+  }, [status, router]);
+
+  // 2. 장바구니 담기 함수
+  const addToCart = (product: Product) => {
+    setCart((prev) => {
+      const existing = prev.find((item) => item.id === product.id);
+      if (existing) {
+        // 이미 있으면 개수만 +1
+        return prev.map((item) =>
+          item.id === product.id ? { ...item, cartQty: item.cartQty + 1 } : item
+        );
+      }
+      // 없으면 새로 추가
+      return [...prev, { ...product, cartQty: 1 }];
+    });
+  };
+
+  // 3. 장바구니 빼기 함수
+  const removeFromCart = (productId: number) => {
+    setCart((prev) =>
+      prev
+        .map((item) =>
+          item.id === productId ? { ...item, cartQty: item.cartQty - 1 } : item
+        )
+        .filter((item) => item.cartQty > 0) // 개수가 0이면 삭제
+    );
+  };
+
+  // 4. 총 금액 계산
+  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.cartQty, 0);
+
+  // 5. 결제 처리 함수 (핵심 로직!)
+  const handleCheckout = async () => {
+    if (cart.length === 0) return;
+    if (!confirm(`총 ${totalAmount.toLocaleString()}원 결제하시겠습니까?`)) return;
+
+    try {
+      // Dexie 트랜잭션 시작 ('rw' = 읽기/쓰기 권한)
+      await db.transaction("rw", db.inventory, db.salesLogs, async () => {
+        const timestamp = new Date();
+
+        for (const item of cart) {
+          // A. 판매 기록 저장 (SalesLog)
+          await db.salesLogs.add({
+            type: "SELL",
+            productId: item.id!, // !는 id가 무조건 있다는 확신
+            count: item.cartQty,
+            totalPrice: item.price * item.cartQty,
+            paymentMethod: "CASH", // 일단 현금으로 고정 (나중에 선택 기능 추가)
+            timestamp: timestamp,
+          });
+
+          // B. 재고 차감 (Inventory) - 여기가 제일 중요!
+          // 세트 상품(Bundle)이라면 구성품들을 하나씩 찾아서 차감
+          for (const component of item.components) {
+            const inventoryItem = await db.inventory.get(component.itemId);
+            if (inventoryItem) {
+              // 현재 재고 - (판매된 세트 개수 * 세트 당 구성품 개수)
+              const deductQty = item.cartQty * component.qty;
+              await db.inventory.update(component.itemId, {
+                stock: inventoryItem.stock - deductQty,
+              });
+            }
+          }
+        }
+      });
+
+      // 결제 성공 후 처리
+      alert("결제가 완료되었습니다! 🎉");
+      setCart([]); // 장바구니 비우기
+    } catch (error) {
+      console.error("결제 실패:", error);
+      alert("결제 중 오류가 발생했습니다.");
+    }
+  };
+
+  if (status === "loading") return <p className="p-8">로딩 중...</p>;
 
   return (
-    <div className="min-h-screen p-8 bg-gray-50">
-      <div className="max-w-4xl mx-auto">
-        <header className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">대시보드</h1>
-            <p className="text-gray-600">환영합니다, {session.user?.name}님!</p>
-          </div>
-          <LogoutButton />
-        </header>
-
-        {/* 여기에 재고 관리 기능들이 들어갈 자리 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="p-6 bg-white rounded-lg shadow border border-gray-200 h-64 flex items-center justify-center text-gray-400">
-            (재고 목록이 표시될 영역)
-          </div>
-          <div className="p-6 bg-white rounded-lg shadow border border-gray-200 h-64 flex items-center justify-center text-gray-400">
-             (판매 기록이 표시될 영역)
-          </div>
+    <div className="min-h-screen bg-gray-100 flex flex-col h-screen">
+      {/* 헤더 */}
+      <header className="bg-white shadow-sm px-6 py-3 flex justify-between items-center z-10">
+        <div>
+          <h1 className="text-xl font-bold text-gray-800">POS System</h1>
         </div>
-      </div>
+        <div className="flex gap-2">
+           <button onClick={resetDatabase} className="px-3 py-2 bg-gray-200 text-xs rounded hover:bg-gray-300">
+            DB 리셋
+          </button>
+          <button onClick={() => signOut({ callbackUrl: "/" })} className="px-3 py-2 bg-red-100 text-red-600 text-xs rounded hover:bg-red-200">
+            로그아웃
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 flex overflow-hidden">
+        {/* 왼쪽: 상품 목록 */}
+        <section className="flex-1 overflow-y-auto bg-gray-50 p-2">
+          <ProductList onAddToCart={addToCart} />
+        </section>
+
+        {/* 오른쪽: 장바구니 */}
+        <aside className="w-96 bg-white border-l border-gray-200 flex flex-col shadow-2xl z-20">
+          <div className="p-4 bg-gray-800 text-white font-bold flex justify-between items-center">
+            <span>장바구니</span>
+            <span className="bg-gray-600 px-2 py-0.5 rounded-full text-xs">{cart.length}종류</span>
+          </div>
+
+          {/* 장바구니 리스트 */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {cart.length === 0 ? (
+              <div className="h-full flex flex-col items-center justify-center text-gray-400 space-y-2">
+                <span className="text-4xl">🛒</span>
+                <p>상품을 선택해주세요</p>
+              </div>
+            ) : (
+              cart.map((item) => (
+                <div key={item.id} className="flex justify-between items-center bg-gray-50 p-3 rounded-lg border border-gray-100">
+                  <div className="flex-1">
+                    <h4 className="font-bold text-gray-800 text-sm">{item.name}</h4>
+                    <p className="text-blue-600 font-bold text-sm">
+                      {(item.price * item.cartQty).toLocaleString()}원
+                    </p>
+                  </div>
+                  
+                  {/* 수량 조절 버튼 */}
+                  <div className="flex items-center gap-3 bg-white px-2 py-1 rounded border shadow-sm">
+                    <button 
+                      onClick={() => removeFromCart(item.id!)}
+                      className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded text-red-500 hover:bg-red-100"
+                    >
+                      -
+                    </button>
+                    <span className="font-bold w-4 text-center">{item.cartQty}</span>
+                    <button 
+                      onClick={() => addToCart(item)}
+                      className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded text-blue-500 hover:bg-blue-100"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          
+          {/* 하단 결제 영역 */}
+          <div className="p-6 border-t border-gray-100 bg-gray-50">
+            <div className="flex justify-between text-2xl font-extrabold mb-6 px-1">
+              <span>Total</span>
+              <span className="text-blue-600">{totalAmount.toLocaleString()}원</span>
+            </div>
+            <button 
+              onClick={handleCheckout}
+              disabled={cart.length === 0}
+              className={`
+                w-full py-4 rounded-xl font-bold text-xl shadow-lg transition-transform active:scale-95
+                ${cart.length === 0 
+                  ? "bg-gray-300 text-gray-500 cursor-not-allowed" 
+                  : "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-blue-200"
+                }
+              `}
+            >
+              결제하기
+            </button>
+          </div>
+        </aside>
+      </main>
     </div>
   );
 }

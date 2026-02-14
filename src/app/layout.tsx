@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import Providers from "@/components/Providers"; // 1. 임포트 추가
 
 export const metadata: Metadata = {
   title: "Cosplay Inventory",
@@ -14,7 +15,12 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        {/* 2. Providers로 body 내부 감싸기 */}
+        <Providers>
+          {children}
+        </Providers>
+      </body>
     </html>
   );
 }

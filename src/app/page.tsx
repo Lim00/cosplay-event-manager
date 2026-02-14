@@ -26,3 +26,5 @@ export default function Home() {
     </main>
   );
 }
+
+// Log-in하고 바로 dashboard로 연결시켜주는것 필욭
