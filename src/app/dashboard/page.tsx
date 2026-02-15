@@ -58,42 +58,49 @@ export default function DashboardPage() {
     if (!confirm(`총 ${totalAmount.toLocaleString()}원 결제하시겠습니까?`)) return;
 
     try {
-      // Dexie 트랜잭션 시작 ('rw' = 읽기/쓰기 권한)
       await db.transaction("rw", db.inventory, db.salesLogs, async () => {
-        const timestamp = new Date();
-
+        // [Step 1] 재고 확인 (먼저 검사!)
         for (const item of cart) {
-          // A. 판매 기록 저장 (SalesLog)
+          for (const component of item.components) {
+            const inventoryItem = await db.inventory.get(component.itemId);
+          
+            // 재고가 없거나 부족하면 에러 발생
+            if (!inventoryItem || inventoryItem.stock < (item.cartQty * component.qty)) {
+              throw new Error(`'${inventoryItem?.name || '상품'}'의 재고가 부족합니다! (남은 수량: ${inventoryItem?.stock || 0})`);
+            }
+          }
+        }
+
+        // [Step 2] 실제 결제 및 차감 (검사 통과 시 실행)
+        const timestamp = new Date();
+        for (const item of cart) {
+          // A. 판매 로그 저장
           await db.salesLogs.add({
             type: "SELL",
-            productId: item.id!, // !는 id가 무조건 있다는 확신
+            productId: item.id!,
             count: item.cartQty,
             totalPrice: item.price * item.cartQty,
-            paymentMethod: "CASH", // 일단 현금으로 고정 (나중에 선택 기능 추가)
+            paymentMethod: "CASH",
             timestamp: timestamp,
           });
 
-          // B. 재고 차감 (Inventory) - 여기가 제일 중요!
-          // 세트 상품(Bundle)이라면 구성품들을 하나씩 찾아서 차감
+          // B. 재고 차감
           for (const component of item.components) {
             const inventoryItem = await db.inventory.get(component.itemId);
-            if (inventoryItem) {
-              // 현재 재고 - (판매된 세트 개수 * 세트 당 구성품 개수)
-              const deductQty = item.cartQty * component.qty;
-              await db.inventory.update(component.itemId, {
-                stock: inventoryItem.stock - deductQty,
-              });
-            }
+            // 위에서 검사 했으므로 여기서 안전하게 차감 가능
+            await db.inventory.update(component.itemId, {
+              stock: inventoryItem!.stock - (item.cartQty * component.qty),
+            });
           }
         }
       });
 
-      // 결제 성공 후 처리
-      alert("결제가 완료되었습니다! 🎉");
-      setCart([]); // 장바구니 비우기
-    } catch (error) {
+      alert("결제가 완료되었습니다!");
+      setCart([]); // 결제 완료 후 장바구니 초기화
+    } catch (error: any) {
+      // 트랜잭션 안에서 에러가 발생하면 모든 DB 변경사항이 자동 취소(Rollback)됩니다.
       console.error("결제 실패:", error);
-      alert("결제 중 오류가 발생했습니다.");
+      alert(error.message || "결제 처리 중 오류가 발생했습니다.");
     }
   };
 
