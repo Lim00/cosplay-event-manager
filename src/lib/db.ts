@@ -31,6 +31,7 @@ export interface SalesLog {
     totalPrice: number;
     paymentMethod: "CASH" | "BANK" | "QR";
     timestamp: Date;
+    eventId?: number; // 어느 행사에서 팔렸는지를 추적
 }
 
 export interface Reservation {
