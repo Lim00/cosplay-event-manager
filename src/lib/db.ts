@@ -32,6 +32,9 @@ export interface SalesLog {
     paymentMethod: "CASH" | "BANK" | "QR";
     timestamp: Date;
     eventId?: number; // 어느 행사에서 팔렸는지를 추적
+
+    // 환불을 할 경우, 환불이 진행된 기존 판매 로그의 id를 참조 (환불이 원래 판매 로그와 연결되도록)
+    originalSaleId?: number;
 }
 
 export interface Reservation {
