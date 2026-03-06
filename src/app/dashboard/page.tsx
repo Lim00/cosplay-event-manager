@@ -99,10 +99,89 @@ export default function DashboardPage() {
     }
   };
 
-  // --- [Logic 5] 환불 요청 (임시 함수) ---
-  const handleRefundRequest = (log: SalesLog) => {
-    // 다음 단계에서 여기에 진짜 환불 로직을 작성할 예정입니다.
-    alert(`[개발 중] 거래 #${log.id}번을 환불하시겠습니까?\n(확인 누르면 아직 아무 일도 안 일어납니다 XD)`);
+  // --- [Logic 5] 완벽한 환불 처리 함수 ---
+  const handleRefundRequest = async (log: SalesLog) => {
+    // 1. [Validation] 이미 전량 환불되었는지 계산하기
+    // db.salesLogs.where() 를 써서 이 원본 거래(log.id)를 가리키는 환불 내역들을 싹 다 가져옵니다.
+    const existingRefunds = await db.salesLogs
+      .where({ originalSaleId: log.id })
+      .toArray();
+    
+    // 지금까지 환불된 총 수량 계산
+    const alreadyRefundedCount = existingRefunds.reduce((sum, r) => sum + r.count, 0);
+    const refundableQty = log.count - alreadyRefundedCount;
+
+    if (refundableQty <= 0) {
+      alert("이미 전량 환불 처리된 거래입니다.");
+      return;
+    }
+
+    // 2. [Interaction] 사용자에게 환불 수량 입력받기 (부분 환불 지원)
+    const input = prompt(`몇 개를 환불하시겠습니까? (최대 환불 가능 수량: ${refundableQty}개)`);
+    if (!input) return; // 취소 누름
+    
+    const refundQty = parseInt(input, 10);
+    if (isNaN(refundQty) || refundQty <= 0 || refundQty > refundableQty) {
+      alert("잘못된 수량을 입력하셨습니다.");
+      return;
+    }
+
+    // 3. [Transaction] DB 원복 로직 (핵심!)
+    try {
+      // 관련된 4개 테이블을 모두 rw(Read/Write) 모드로 엽니다.
+      await db.transaction("rw", db.inventory, db.salesLogs, db.products, db.inventoryLogs, async () => {
+        
+        // A. 원래 팔렸던 메뉴(Product) 정보 가져오기 (단가 계산 및 구성품 확인용)
+        const product = await db.products.get(log.productId);
+        if (!product) throw new Error("상품 데이터를 찾을 수 없어 환불할 수 없습니다.");
+
+        const unitPrice = log.totalPrice / log.count; // 단가 (세트 할인 등이 적용된 실제 구매가)
+        const refundTotal = unitPrice * refundQty;    // 돌려줄 금액
+
+        const timestamp = new Date();
+
+        // B. 환불 로그(마이너스 매출) 생성
+        await db.salesLogs.add({
+          type: "REFUND",
+          productId: log.productId,
+          count: refundQty,
+          totalPrice: -refundTotal, // 중요: 마이너스로 넣어야 나중에 sum() 할 때 알아서 매출이 깎임!
+          paymentMethod: log.paymentMethod,
+          timestamp: timestamp,
+          eventId: log.eventId,
+          originalSaleId: log.id // 원본 거래 ID 꼬리표 붙이기
+        });
+
+        // C. 물리적 재고 복구 및 로그(InventoryLog) 작성
+        for (const component of product.components) {
+          const invItem = await db.inventory.get(component.itemId);
+          if (invItem) {
+            // (환불할 세트 수량) * (세트 내 구성품 개수) = 돌아올 실제 물리적 재고량
+            const restoreQty = refundQty * component.qty;
+            const newStock = invItem.stock + restoreQty;
+
+            // 재고 업데이트
+            await db.inventory.update(invItem.id!, { stock: newStock });
+
+            // [New!] 재고 변동 이력에 '환불로 인한 입고' 기록
+            await db.inventoryLogs.add({
+              itemId: invItem.id!,
+              changeQty: restoreQty, // + 수량
+              currentStock: newStock,
+              reason: "REFUND",
+              timestamp: timestamp,
+              eventId: log.eventId
+            });
+          }
+        }
+      });
+
+      alert(`${refundQty}개 환불 및 재고 복구가 완료되었습니다.`);
+      
+    } catch (error: any) {
+      console.error("환불 트랜잭션 실패:", error);
+      alert(error.message || "환불 처리 중 오류가 발생했습니다.");
+    }
   };
 
   // 로딩 화면

@@ -61,27 +61,40 @@ export interface EventStockSnapshot {
     startStock: number;     // 행사 시작 시점의 재고 수량
 }
 
+// 재고 변동 이력 인터페이스 추가
+export interface InventoryLog {
+    id?: number;
+    itemId: number;         // 어떤 물리적 굿즈(Inventory)인지?
+    changeQty: number;      // 변동량 (플러스 / 마이너스)
+    currentStock: number;   // 변동 직후 남은 최종 재고 (스냅샷)
+    reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST"; // 변동 사유
+    timestamp: Date;
+    eventId?: number;        // 행사와 연관된 변동인지 추적 (선택적)
+}
+
 // 2. Dexie DB 클래스 정의
 export class CosplayDatabase extends Dexie {
     // 테이블 정의
-    inventory!: Table<Inventory, number>
-    products!: Table<Product, number>
-    salesLogs!: Table<SalesLog, number>
-    reservations!: Table<Reservation, number>
-    events!: Table<Event, number>
-    eventStockSnapshots!: Table<EventStockSnapshot, number>
+    inventory!: Table<Inventory, number>;
+    products!: Table<Product, number>;
+    salesLogs!: Table<SalesLog, number>;
+    reservations!: Table<Reservation, number>;
+    events!: Table<Event, number>;
+    eventStockSnapshots!: Table<EventStockSnapshot, number>;
+    inventoryLogs!: Table<InventoryLog, number>;
 
     constructor() {
         super("CosplayManagerDB");
 
         // 3. 스키마 정의 (검색에 사용할 컬럼만 적으면 됨)
-        this.version(2).stores({
+        this.version(4).stores({
             inventory: "++id, name, category",
             products: "++id, name, isBundle",
-            salesLogs: "++id, type, paymentMethod, timestamp",
+            salesLogs: "++id, type, paymentMethod, timestamp, originalSaleId",
             reservations: "++id, customerName, phoneNumber, isPickedUp",
             events: "++id, status, date",
             eventStockSnapshots: "++id, eventId, itemId",
+            inventoryLogs: "++id, itemId, reason, timestamp" // itemId로 특정 상품의 이력만 모아볼 수 있게 index 추가
         });
     }
 }
