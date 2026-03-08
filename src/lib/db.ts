@@ -8,6 +8,8 @@ export interface Inventory {
     price: number;
     stock: number;
     initialStock: number;
+
+    description?: string; // 굿즈에 대한 추가 설명 (선택적)
 }
 
 export interface ProductComponent {
@@ -17,6 +19,7 @@ export interface ProductComponent {
 
 export interface Product {
     id?: number;
+    eventId: number;   // [New!] 이 메뉴는 어느 행사 소속인가? (이게 있어야 님의 아이디어가 실현됨!)
     name: string;
     price: number;
     isBundle: boolean;
@@ -50,7 +53,7 @@ export interface Event {
     id?: number;
     name: string;       // ex: "코믹월드 45회"
     date: Date;
-    status: "PREPARING" | "ACTIVE" | "CLOSED";
+    status: "PREPARING" | "OPEN" | "CLOSED";
 }
 
 // 행사 시작 시점의 재고 스냅샷 (통계 및 analytics 용도)
@@ -87,14 +90,16 @@ export class CosplayDatabase extends Dexie {
         super("CosplayManagerDB");
 
         // 3. 스키마 정의 (검색에 사용할 컬럼만 적으면 됨)
-        this.version(4).stores({
+        this.version(6).stores({
             inventory: "++id, name, category",
-            products: "++id, name, isBundle",
-            salesLogs: "++id, type, paymentMethod, timestamp, originalSaleId",
-            reservations: "++id, customerName, phoneNumber, isPickedUp",
+            products: "++id, name, isBundle, eventId", 
+            // 👇 salesLogs에 eventId가 있는지 다시 한번 꼼꼼히 확인!
+            salesLogs: "++id, type, paymentMethod, timestamp, eventId, originalSaleId",
+            reservations: "++id, customerName, isPickedUp",
             events: "++id, status, date",
             eventStockSnapshots: "++id, eventId, itemId",
-            inventoryLogs: "++id, itemId, reason, timestamp" // itemId로 특정 상품의 이력만 모아볼 수 있게 index 추가
+            // 👇 나중을 위해 inventoryLogs에도 eventId를 달아둡니다.
+            inventoryLogs: "++id, itemId, reason, timestamp, eventId" 
         });
     }
 }

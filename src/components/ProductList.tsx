@@ -1,47 +1,44 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
-import { db, Product } from "@/lib/db"; // Product 타입 임포트
+import { db, Product } from "@/lib/db";
 
-// 부모에게 받을 함수 타입 정의
 interface Props {
+  eventId: number; // [New!] 어떤 행사의 메뉴판인지 부모로부터 받아옴
   onAddToCart: (product: Product) => void;
 }
 
-export default function ProductList({ onAddToCart }: Props) {
-  const products = useLiveQuery(() => db.products.toArray());
+export default function ProductList({ eventId, onAddToCart }: Props) {
+  // 💡 핵심: eventId로 마스킹(필터링)된 데이터만 가져옵니다!
+  const products = useLiveQuery(
+    () => db.products.where({ eventId }).toArray(),
+    [eventId]
+  );
 
-  if (!products) return <div className="p-4 text-gray-500">로딩 중...</div>;
+  if (!products) return <div className="p-4 text-gray-500">메뉴를 불러오는 중...</div>;
+  if (products.length === 0) return <div className="p-4 text-gray-500">등록된 메뉴가 없습니다. 관리자에서 메뉴를 세팅해주세요.</div>;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-4">
       {products.map((product) => (
         <button
           key={product.id}
-          className={`
-            relative p-4 rounded-xl border-2 transition-all active:scale-95 text-left h-32 flex flex-col justify-between
-            ${product.isBundle 
-              ? "bg-purple-50 border-purple-200 hover:border-purple-400" 
-              : "bg-white border-gray-200 hover:border-blue-400"
-            }
-          `}
-          // 클릭 시 부모에게 상품 정보 전달
           onClick={() => onAddToCart(product)}
+          className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 hover:border-blue-400 hover:shadow-md transition-all text-left flex flex-col h-full active:scale-95"
         >
-          <div>
-            {product.isBundle && (
-              <span className="inline-block px-2 py-0.5 mb-1 text-[10px] font-bold text-purple-700 bg-purple-100 rounded-full">
-                SET
-              </span>
-            )}
-            <h3 className="font-bold text-gray-800 leading-tight text-sm">
-              {product.name}
-            </h3>
+          {product.isBundle && (
+            <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded mb-2 w-max">
+              ✨ 세트 할인
+            </span>
+          )}
+          <h3 className="font-bold text-gray-800 leading-tight mb-2 line-clamp-2">
+            {product.name}
+          </h3>
+          <div className="mt-auto">
+            <span className="text-blue-600 font-extrabold">
+              {product.price.toLocaleString()}원
+            </span>
           </div>
-          
-          <p className="font-extrabold text-blue-600 text-right">
-            {product.price.toLocaleString()}
-          </p>
         </button>
       ))}
     </div>
