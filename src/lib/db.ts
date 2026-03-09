@@ -73,6 +73,7 @@ export interface InventoryLog {
     reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST"; // 변동 사유
     timestamp: Date;
     eventId?: number;        // 행사와 연관된 변동인지 추적 (선택적)
+    memo?: string; // 🌟 [New] 변경 사유 (선택 사항)
 }
 
 // 2. Dexie DB 클래스 정의
