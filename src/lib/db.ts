@@ -28,7 +28,7 @@ export interface Product {
 
 export interface SalesLog {
     id?: number;
-    type: "SELL" | "REFUND";
+    type: "SELL" | "REFUND" | "EXCHANGE"; // 판매, 환불, 교환 등 다양한 유형을 기록할 수 있도록 확장
     productId: number; // Product의 id를 참조
     count: number;
     totalPrice: number;
@@ -70,7 +70,7 @@ export interface InventoryLog {
     itemId: number;         // 어떤 물리적 굿즈(Inventory)인지?
     changeQty: number;      // 변동량 (플러스 / 마이너스)
     currentStock: number;   // 변동 직후 남은 최종 재고 (스냅샷)
-    reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST"; // 변동 사유
+    reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST" | "EXCHANGE"; // 변동 사유
     timestamp: Date;
     eventId?: number;        // 행사와 연관된 변동인지 추적 (선택적)
     memo?: string; // 🌟 [New] 변경 사유 (선택 사항)

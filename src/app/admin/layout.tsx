@@ -17,17 +17,17 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
             href="/admin/events" 
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
           >
-            🎪 행사 컨트롤러
+            행사 관리
           </Link>
           <Link 
             href="/admin/inventory" 
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
           >
-            📦 글로벌 재고 관리
+            재고 관리
           </Link>
           {/* 나중에 추가될 통계/정산 페이지 자리 */}
           <div className="block p-3 rounded-lg text-gray-600 font-bold cursor-not-allowed">
-            📊 정산 및 통계 (예정)
+            정산 및 통계 (예정)
           </div>
         </nav>
 

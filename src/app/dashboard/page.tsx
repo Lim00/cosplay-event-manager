@@ -110,6 +110,71 @@ function POSManager() {
     }
   };
 
+  // 🌟 [New] 파본 교환 처리 로직
+  const handleExchangeRequest = async (log: SalesLog) => {
+    const input = prompt(`몇 개를 파본 교환하시겠습니까? (최대: ${log.count}개)`);
+    if (!input) return;
+    
+    const exchangeQty = parseInt(input, 10);
+    if (isNaN(exchangeQty) || exchangeQty <= 0 || exchangeQty > log.count) {
+      return alert("잘못된 수량입니다.");
+    }
+
+    try {
+      await db.transaction("rw", [db.inventory, db.salesLogs, db.products, db.inventoryLogs], async () => {
+        const product = await db.products.get(log.productId);
+        if (!product) throw new Error("상품 데이터를 찾을 수 없습니다.");
+
+        // 1. 손님에게 내어줄 정상품 재고가 창고에 남아있는지 먼저 검사합니다.
+        for (const component of product.components) {
+          const invItem = await db.inventory.get(component.itemId);
+          const deductQty = exchangeQty * component.qty;
+          if (!invItem || invItem.stock < deductQty) {
+            throw new Error(`교환해줄 정상품 '${invItem?.name}'의 재고가 부족합니다! (현재: ${invItem?.stock || 0}개)`);
+          }
+        }
+
+        const timestamp = new Date();
+
+        // 2. 매출은 0원이지만, 영수증(SalesLog)에 교환 기록을 남깁니다.
+        await db.salesLogs.add({
+          type: "EXCHANGE",
+          productId: log.productId,
+          count: exchangeQty,
+          totalPrice: 0, // 🌟 교환이므로 수익/매출 변동 없음 (0원)
+          paymentMethod: log.paymentMethod,
+          timestamp: timestamp,
+          eventId: eventId,
+          originalSaleId: log.id // 원본 영수증 참조
+        });
+
+        // 3. 글로벌 창고에서 물리적 재고를 차감하고, 장부에 '파본 교환' 사유를 남깁니다.
+        for (const component of product.components) {
+          const invItem = await db.inventory.get(component.itemId);
+          if (invItem) {
+            const deductQty = exchangeQty * component.qty;
+            const newStock = invItem.stock - deductQty; // 정상품을 꺼내주므로 재고 감소(-)
+            
+            await db.inventory.update(invItem.id!, { stock: newStock });
+
+            await db.inventoryLogs.add({
+              itemId: invItem.id!,
+              changeQty: -deductQty,
+              currentStock: newStock,
+              reason: "EXCHANGE",
+              timestamp: timestamp,
+              eventId: eventId,
+              memo: `파본 교환 처리 (원본 거래 #${log.id})`
+            });
+          }
+        }
+      });
+      alert(`${exchangeQty}개 파본 교환이 완료되었습니다. (재고 -${exchangeQty})`);
+    } catch (error: any) {
+      alert(error.message || "교환 실패");
+    }
+  };
+
   // 기존에 만들었던 완벽한 환불 로직 (eventId 기록 부분만 추가)
   const handleRefundRequest = async (log: SalesLog) => {
     const existingRefunds = await db.salesLogs.where({ originalSaleId: log.id }).toArray();
@@ -236,7 +301,11 @@ function POSManager() {
             <div className="p-2 bg-gray-200 text-gray-600 text-xs font-bold uppercase shrink-0">Recent Activity</div>
             <div className="flex-1 overflow-y-auto p-2">
               {/* 자식 컴포넌트에게 eventId를 넘겨줍니다! */}
-              <RecentSales eventId={eventId} onRefundClick={handleRefundRequest} />
+              <RecentSales 
+                eventId={eventId} 
+                onRefundClick={handleRefundRequest} 
+                onExchangeClick={handleExchangeRequest} 
+              />
             </div>
           </div>
         </aside>
