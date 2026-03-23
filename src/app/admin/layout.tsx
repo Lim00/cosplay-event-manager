@@ -25,10 +25,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             재고 관리
           </Link>
-          {/* 나중에 추가될 통계/정산 페이지 자리 */}
-          <div className="block p-3 rounded-lg text-gray-600 font-bold cursor-not-allowed">
-            정산 및 통계 (예정)
-          </div>
+          <Link 
+            href="/admin/analytics" 
+            className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
+          >
+            📊 정산 및 통계
+          </Link>
         </nav>
 
         {/* 하단 메인으로 나가기 */}
