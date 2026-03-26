@@ -2,12 +2,13 @@
 
 import { useSession, signOut } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useMemo } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, Product, SalesLog } from "@/lib/db";
 import { resetDatabase } from "@/lib/seed";
 import ProductList from "@/components/ProductList";
 import RecentSales from "@/components/RecentSales";
+import SearchBar from "@/components/SearchBar"; 
 
 interface CartItem extends Product {
   cartQty: number;
@@ -24,6 +25,23 @@ function POSManager() {
 
   // 현재 행사 정보 가져오기 (헤더에 표시용)
   const currentEvent = useLiveQuery(() => db.events.get(eventId), [eventId]);
+
+  // Reservation 모달 상태 및 검색어 상태
+  const [isPickupModalOpen, setIsPickupModalOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  // 이 행사의 전체 예약 중 아직 수령 안 한(대기 중인) 예약만 메모리로 불러오기
+  const pendingReservations = useLiveQuery(
+    () => db.reservations.toArray().then(arr => arr.filter(r => r.eventId === eventId && !r.isPickedUp)),
+    [eventId]
+  );
+
+  // 검색어로 필터링 (이름 또는 번호 뒷자리)
+  const filteredReservations = useMemo(() => {
+    if (!pendingReservations) return [];
+    return pendingReservations.filter(r => 
+      r.customerName.includes(searchQuery) || r.phoneLast4.includes(searchQuery)
+    );
+  }, [pendingReservations, searchQuery]);
 
   const [cart, setCart] = useState<CartItem[]>([]);
 
@@ -107,6 +125,35 @@ function POSManager() {
       setCart([]); 
     } catch (error: any) {
       alert(error.message || "결제 실패");
+    }
+  };
+
+  const handlePickup = async (reservation: any) => {
+    if (!confirm(`[${reservation.customerName}] 님의 예약을 수령 완료 처리하시겠습니까?`)) return;
+
+    try {
+      await db.transaction("rw", [db.reservations, db.salesLogs], async () => {
+        // 1. 예약 상태 업데이트
+        await db.reservations.update(reservation.id, { isPickedUp: true });
+
+        // 2. 매출 인식 (PREPAID). 재고는 이미 깎였으므로 inventory 테이블은 건드리지 않음!
+        const timestamp = new Date();
+        for (const item of reservation.items) {
+          await db.salesLogs.add({
+            type: "SELL",
+            productId: item.productId,
+            count: item.qty,
+            totalPrice: item.price * item.qty,
+            paymentMethod: "PREPAID", // 🌟 선입금 마킹!
+            timestamp: timestamp,
+            eventId: eventId,
+          });
+        }
+      });
+      alert("수령 처리가 완료되었습니다!");
+      setSearchQuery("");
+    } catch (error) {
+      alert("수령 처리 중 오류가 발생했습니다.");
     }
   };
 
@@ -248,14 +295,17 @@ function POSManager() {
     <div className="min-h-screen bg-gray-100 flex flex-col h-screen">
       <header className="bg-gray-800 text-white px-6 py-3 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-4">
-          <button onClick={() => router.push("/admin/events")} className="text-gray-300 hover:text-white text-sm">
-            ← 나가기
-          </button>
-          <h1 className="text-xl font-bold">
-            POS <span className="text-purple-300 ml-2 text-sm px-2 py-1 bg-gray-700 rounded-full">{currentEvent?.name}</span>
-          </h1>
+          <button onClick={() => router.push("/admin/events")} className="text-gray-300 hover:text-white text-sm">← 나가기</button>
+          <h1 className="text-xl font-bold">POS <span className="text-purple-300 ml-2 text-sm px-2 py-1 bg-gray-700 rounded-full">{currentEvent?.name}</span></h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-3 items-center">
+          {/* 🌟 수령 버튼 추가 */}
+          <button 
+            onClick={() => setIsPickupModalOpen(true)} 
+            className="px-4 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 shadow flex items-center gap-2"
+          >
+            📦 선입금 픽업 <span className="bg-purple-800 px-1.5 py-0.5 rounded-full text-xs">{pendingReservations?.length || 0}</span>
+          </button>
           <button onClick={resetDatabase} className="px-3 py-2 bg-gray-700 text-xs rounded hover:bg-gray-600">DB 리셋</button>
         </div>
       </header>
@@ -309,6 +359,50 @@ function POSManager() {
             </div>
           </div>
         </aside>
+        {isPickupModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col h-[80vh] shadow-2xl overflow-hidden">
+            <div className="p-6 bg-gray-50 border-b flex justify-between items-center shrink-0">
+              <h2 className="text-2xl font-bold text-gray-800">📦 선입금 예약 수령</h2>
+              <button onClick={() => setIsPickupModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
+            </div>
+            
+            <div className="p-6 shrink-0 border-b border-gray-100">
+              {/* 🌟 재사용 가능한 SearchBar 등장! */}
+              <SearchBar 
+                value={searchQuery} 
+                onChange={setSearchQuery} 
+                placeholder="예약자 이름이나 번호 뒷자리(예: 1234)를 입력하세요..." 
+              />
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-3">
+              {filteredReservations?.length === 0 ? (
+                <div className="text-center text-gray-400 py-10 font-bold">대기 중인 예약 내역이 없습니다.</div>
+              ) : (
+                filteredReservations?.map(r => (
+                  <div key={r.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm">
+                    <div>
+                      <div className="text-lg font-black text-gray-800 mb-1">
+                        {r.customerName} <span className="text-sm font-bold text-gray-400 ml-1">({r.phoneLast4})</span>
+                      </div>
+                      <div className="text-sm text-gray-500 font-bold">
+                        {r.items.map(i => `${i.name} ${i.qty}개`).join(" + ")}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => handlePickup(r)}
+                      className="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+                    >
+                      수령 완료
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
       </main>
     </div>
   );

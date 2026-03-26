@@ -19,6 +19,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             행사 관리
           </Link>
+          <Link href="/admin/reservations" className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white">
+            📝 선입금 예약 관리
+          </Link>
           <Link 
             href="/admin/inventory" 
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"

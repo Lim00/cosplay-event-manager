@@ -32,7 +32,7 @@ export interface SalesLog {
     productId: number; // Product의 id를 참조
     count: number;
     totalPrice: number;
-    paymentMethod: "CASH" | "BANK" | "QR";
+    paymentMethod: "CASH" | "BANK" | "QR" | "PREPAID";
     timestamp: Date;
     eventId?: number; // 어느 행사에서 팔렸는지를 추적
 
@@ -40,12 +40,22 @@ export interface SalesLog {
     originalSaleId?: number;
 }
 
+export interface ReservationItem {
+  productId: number;
+  name: string;
+  qty: number;
+  price: number;
+}
+
 export interface Reservation {
-    id?: number;
-    customerName: string;
-    phoneNumber: string;
-    items: ProductComponent[];
-    isPickedUp: boolean;
+  id?: number;
+  eventId: number;
+  customerName: string;
+  phoneLast4: string;
+  items: ReservationItem[];
+  totalAmount: number;
+  isPickedUp: boolean;
+  timestamp: Date;
 }
 
 // 행사 정보
@@ -70,10 +80,10 @@ export interface InventoryLog {
     itemId: number;         // 어떤 물리적 굿즈(Inventory)인지?
     changeQty: number;      // 변동량 (플러스 / 마이너스)
     currentStock: number;   // 변동 직후 남은 최종 재고 (스냅샷)
-    reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST" | "EXCHANGE"; // 변동 사유
+    reason: "ADD" | "REMOVE" | "SELL" | "REFUND" | "ADJUST" | "EXCHANGE" | "RESERVE"; // 🌟 RESERVE 추가    timestamp: Date;
     timestamp: Date;
     eventId?: number;        // 행사와 연관된 변동인지 추적 (선택적)
-    memo?: string; // 🌟 [New] 변경 사유 (선택 사항)
+    memo?: string;          // 🌟 [New] 변경 사유 (선택 사항)
 }
 
 // 2. Dexie DB 클래스 정의
