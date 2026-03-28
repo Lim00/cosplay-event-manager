@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useSession, signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 <Link 
   href="/api/auth/signin" // NextAuth 기본 로그인 페이지로 보내면 둘 다 뜹니다
@@ -10,6 +15,21 @@ import Link from "next/link";
 </Link>
 
 export default function Home() {
+
+  const { status } = useSession();
+  const router = useRouter();
+
+  // 🌟 [New] 로그인 상태면 바로 Admin Cockpit으로 튕겨냅니다!
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/admin");
+    }
+  }, [status, router]);
+
+  if (status === "loading") {
+    return <div className="flex items-center justify-center h-screen">로딩 중...</div>;
+  }
+  
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-6 p-24">
       <h1 className="text-4xl font-bold">Booth on the Ground</h1>
