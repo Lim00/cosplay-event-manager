@@ -16,9 +16,12 @@ function ProductsManager() {
   const [searchQuery, setSearchQuery] = useState("");
   const [importEventId, setImportEventId] = useState<number | "">("");
   
-  // 가격 조정 모달용 상태 (님의 완벽한 설계 반영!)
+  // 가격 조정 모달용 상태
   const [editingProductId, setEditingProductId] = useState<number | null>(null);
   const [tempPrice, setTempPrice] = useState<string>("");
+
+  // 체크박스 상태 관리 (Set을 사용하여 성능 최적화)
+  const [checkedIds, setCheckedIds] = useState<Set<number>>(new Set());
 
   // 🌟 [Data] DB 쿼리
   const currentEvent = useLiveQuery(() => db.events.get(eventId), [eventId]);
@@ -29,10 +32,10 @@ function ProductsManager() {
     [eventId]
   );
 
-  // 🌟 [Memoization] 검색어 기반 재고 필터링 (렌더링 최적화)
+  // 🌟 [Memoization] 검색어 기반 재고 필터링
   const filteredInventory = useMemo(() => {
     if (!inventory) return [];
-    if (!searchQuery) return inventory; // 검색어가 없으면 전체 반환
+    if (!searchQuery) return inventory;
     
     const lowerQuery = searchQuery.toLowerCase();
     return inventory.filter(item => 
@@ -41,7 +44,30 @@ function ProductsManager() {
     );
   }, [inventory, searchQuery]);
 
-  // 1. 기존 메뉴 추가 로직 (재사용)
+  // 체크박스 개별 토글
+  const toggleCheck = (id: number) => {
+    setCheckedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  // 검색/필터링된 목록 전체 선택 및 해제
+  const toggleAll = () => {
+    if (!filteredInventory) return;
+    const allFilteredIds = filteredInventory.map(i => i.id!);
+    const isAllChecked = allFilteredIds.length > 0 && allFilteredIds.every(id => checkedIds.has(id));
+
+    if (isAllChecked) {
+      setCheckedIds(new Set());
+    } else {
+      setCheckedIds(new Set(allFilteredIds));
+    }
+  };
+
+  // 단일 메뉴 추가
   const handleAddToMenu = async (item: Inventory) => {
     try {
       const exists = eventProducts?.find(p => !p.isBundle && p.components[0].itemId === item.id);
@@ -49,9 +75,7 @@ function ProductsManager() {
 
       await db.products.add({
         eventId: eventId,
-        name: item.name,
-        price: item.price, // 기본 창고 가격으로 초기 세팅
-        isBundle: false,
+        name: item.name, price: item.price, isBundle: false,
         components: [{ itemId: item.id!, qty: 1 }],
       });
     } catch (error) {
@@ -59,38 +83,63 @@ function ProductsManager() {
     }
   };
 
-  // 2. 메뉴 삭제 로직
+  // 선택된 항목 일괄 추가 (트랜잭션)
+  const handleBulkAddToMenu = async () => {
+    if (checkedIds.size === 0) return alert("선택된 항목이 없습니다.");
+
+    try {
+      const itemsToAdd = inventory?.filter(i => checkedIds.has(i.id!)) || [];
+      let addedCount = 0;
+      let skippedCount = 0;
+
+      await db.transaction('rw', db.products, async () => {
+        for (const item of itemsToAdd) {
+          const exists = eventProducts?.find(p => !p.isBundle && p.components[0].itemId === item.id);
+          if (exists) {
+            skippedCount++;
+            continue;
+          }
+          await db.products.add({
+            eventId: eventId,
+            name: item.name, price: item.price, isBundle: false,
+            components: [{ itemId: item.id!, qty: 1 }],
+          });
+          addedCount++;
+        }
+      });
+
+      alert(`✅ ${addedCount}개 항목 일괄 추가 완료!\n(중복으로 스킵됨: ${skippedCount}개)`);
+      setCheckedIds(new Set()); 
+    } catch (error) {
+      alert("일괄 등록 중 오류가 발생했습니다.");
+    }
+  };
+
+  // 단일 메뉴 삭제
   const handleRemoveFromMenu = async (productId: number) => {
     if (confirm("메뉴판에서 이 항목을 내리시겠습니까? (영수증 기록에는 영향을 주지 않습니다)")) {
       await db.products.delete(productId);
     }
   };
 
-  // 🌟 3. [New] 가격 조정 로직 (Sanity Check 포함)
+  // 가격 조정 (Sanity Check 포함)
   const handleAdjustPriceMenu = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingProductId) return;
 
     const newPrice = parseInt(tempPrice, 10);
-    
-    // 방어 로직: NaN, 음수, 비정상적으로 큰 금액 차단
-    if (isNaN(newPrice) || newPrice < 0) {
-      return alert("🚫 올바른 가격(숫자)을 0원 이상으로 입력해주세요.");
-    }
-    if (newPrice > 10000000) {
-      return alert("🚫 가격이 너무 높습니다. 단위를 확인해주세요.");
-    }
+    if (isNaN(newPrice) || newPrice < 0) return alert("🚫 올바른 가격(숫자)을 0원 이상으로 입력해주세요.");
+    if (newPrice > 10000000) return alert("🚫 가격이 너무 높습니다. 단위를 확인해주세요.");
 
     try {
-      // O(1) 업데이트: 전체를 뒤질 필요 없이 id로 즉시 업데이트!
       await db.products.update(editingProductId, { price: newPrice });
-      setEditingProductId(null); // 모달 닫기
+      setEditingProductId(null);
     } catch (error) {
       alert("가격 변경 실패");
     }
   };
 
-  // 🌟 4. [New] 이전 행사 메뉴 불러오기 (Import)
+  // 이전 행사 메뉴 불러오기
   const handleImportMenu = async () => {
     if (!importEventId) return;
     if (!confirm("선택한 행사의 메뉴 구성을 그대로 복사해 오시겠습니까?")) return;
@@ -101,13 +150,11 @@ function ProductsManager() {
       let skippedCount = 0;
 
       for (const p of pastProducts) {
-        // 이미 현재 메뉴에 같은 이름이 있는지 방어
         if (eventProducts?.some(ep => ep.name === p.name)) {
           skippedCount++;
           continue;
         }
 
-        // 창고에서 삭제된 굿즈가 포함된 메뉴인지 무결성 검사
         let isComponentsValid = true;
         for (const comp of p.components) {
           const invItem = await db.inventory.get(comp.itemId);
@@ -117,14 +164,12 @@ function ProductsManager() {
         if (isComponentsValid) {
           await db.products.add({
             eventId: eventId,
-            name: p.name,
-            price: p.price, // 과거에 할인/조정했던 가격 그대로 복사됨
-            isBundle: p.isBundle,
+            name: p.name, price: p.price, isBundle: p.isBundle,
             components: p.components,
           });
           importedCount++;
         } else {
-          skippedCount++; // 창고에 없는 굿즈라 스킵
+          skippedCount++;
         }
       }
       
@@ -135,7 +180,6 @@ function ProductsManager() {
     }
   };
 
-  // 가격 수정 모달 열기 헬퍼
   const openPriceModal = (productId: number, currentPrice: number) => {
     setEditingProductId(productId);
     setTempPrice(currentPrice.toString());
@@ -145,6 +189,7 @@ function ProductsManager() {
 
   return (
     <div className="p-8 max-w-6xl mx-auto min-h-screen flex flex-col h-screen">
+      {/* 상단 헤더 & 컨트롤 */}
       <div className="flex justify-between items-end mb-6 shrink-0">
         <div>
           <button onClick={() => router.push("/admin/events")} className="text-gray-500 hover:text-gray-800 font-bold mb-2 flex items-center gap-1">
@@ -155,7 +200,7 @@ function ProductsManager() {
           </h1>
         </div>
 
-        {/* 🌟 이전 행사 메뉴 불러오기 UI */}
+        {/* 이전 행사 메뉴 불러오기 UI */}
         <div className="flex items-center gap-2 bg-gray-100 p-2 rounded-lg border border-gray-200">
           <span className="text-sm font-bold text-gray-600 ml-2">과거 행사 불러오기:</span>
           <select 
@@ -181,9 +226,35 @@ function ProductsManager() {
         {/* ---------------- 왼쪽: 창고 재고 리스트 ---------------- */}
         <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full">
           <div className="mb-4 shrink-0">
-            <h2 className="text-xl font-bold text-gray-800 mb-2">📦 1. 창고에서 굿즈 고르기</h2>
-            {/* 🌟 우리가 만든 재사용 검색 컴포넌트! */}
+            <div className="flex justify-between items-center mb-2">
+              <h2 className="text-xl font-bold text-gray-800">📦 1. 창고에서 굿즈 고르기</h2>
+              
+              {/* 일괄 추가 액션 버튼 */}
+              {checkedIds.size > 0 && (
+                <button 
+                  onClick={handleBulkAddToMenu}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 animate-pulse-once"
+                >
+                  선택한 {checkedIds.size}개 일괄 추가 ➔
+                </button>
+              )}
+            </div>
+            
             <SearchBar value={searchQuery} onChange={setSearchQuery} placeholder="이름이나 카테고리로 검색하세요..." />
+            
+            {/* 전체 선택 체크박스 */}
+            <div className="flex items-center gap-2 mt-2 px-2 pb-2 border-b border-gray-100">
+              <input 
+                type="checkbox" 
+                id="selectAll"
+                className="w-4 h-4 cursor-pointer accent-blue-600"
+                checked={filteredInventory?.length > 0 && filteredInventory.every(i => checkedIds.has(i.id!))}
+                onChange={toggleAll}
+              />
+              <label htmlFor="selectAll" className="text-sm font-bold text-gray-600 cursor-pointer select-none">
+                {searchQuery ? "검색 결과 전체 선택" : "전체 선택"}
+              </label>
+            </div>
           </div>
           
           <div className="overflow-y-auto flex-1 pr-2 space-y-2">
@@ -191,16 +262,27 @@ function ProductsManager() {
               <p className="text-center text-gray-400 mt-10 text-sm">검색 결과가 없습니다.</p>
             ) : (
               filteredInventory.map(item => (
-                <div key={item.id} className="flex justify-between items-center p-3 border rounded-xl hover:border-purple-300 transition-colors bg-gray-50">
-                  <div>
-                    <span className="bg-gray-200 text-xs font-bold px-2 py-0.5 rounded mr-2 text-gray-600">{item.category}</span>
-                    <span className="font-bold text-gray-800">{item.name}</span>
-                    <span className="ml-2 text-sm font-bold text-gray-500">{item.price.toLocaleString()}원</span>
+                <label key={item.id} className="flex justify-between items-center p-3 border rounded-xl hover:border-blue-300 transition-colors bg-gray-50 cursor-pointer">
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox" 
+                      className="w-5 h-5 accent-blue-600 cursor-pointer"
+                      checked={checkedIds.has(item.id!)}
+                      onChange={() => toggleCheck(item.id!)}
+                    />
+                    <div>
+                      <span className="bg-gray-200 text-xs font-bold px-2 py-0.5 rounded mr-2 text-gray-600">{item.category}</span>
+                      <span className="font-bold text-gray-800">{item.name}</span>
+                      <span className="ml-2 text-sm font-bold text-gray-500">{item.price.toLocaleString()}원</span>
+                    </div>
                   </div>
-                  <button onClick={() => handleAddToMenu(item)} className="px-4 py-2 bg-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-300 transition-colors">
-                    메뉴에 추가
+                  <button 
+                    onClick={(e) => { e.preventDefault(); handleAddToMenu(item); }} 
+                    className="px-4 py-2 bg-gray-200 text-gray-700 font-bold text-sm rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    추가
                   </button>
-                </div>
+                </label>
               ))
             )}
           </div>
@@ -214,7 +296,6 @@ function ProductsManager() {
               <p className="text-center text-purple-400 mt-10 text-sm">아직 등록된 메뉴가 없습니다.<br/>왼쪽에서 굿즈를 추가해주세요!</p>
             ) : (
               eventProducts.map(product => {
-                // 창고 원본 가격과 행사가격이 다르면 표시해주는 로직
                 const invItem = inventory?.find(i => i.id === product.components[0]?.itemId);
                 const isPriceChanged = !product.isBundle && invItem && invItem.price !== product.price;
 
@@ -226,7 +307,6 @@ function ProductsManager() {
                         {product.isBundle && <span className="ml-2 bg-purple-100 text-purple-600 text-xs px-2 py-0.5 rounded font-bold">세트 상품</span>}
                       </div>
                       <div className="flex items-center gap-1">
-                        {/* 🌟 가격 수정 버튼 (연필 아이콘) */}
                         <button 
                           onClick={() => openPriceModal(product.id!, product.price)}
                           className="w-8 h-8 flex items-center justify-center bg-blue-50 text-blue-500 rounded hover:bg-blue-100 transition-colors"
@@ -234,7 +314,6 @@ function ProductsManager() {
                         >
                           ✏️
                         </button>
-                        {/* ❌ 메뉴 삭제 버튼 */}
                         <button 
                           onClick={() => handleRemoveFromMenu(product.id!)}
                           className="w-8 h-8 flex items-center justify-center bg-red-50 text-red-500 rounded hover:bg-red-100 transition-colors"
@@ -271,7 +350,7 @@ function ProductsManager() {
         </div>
       </div>
 
-      {/* 🌟 가격 조정 모달 팝업 */}
+      {/* 🌟 가격 조정 팝업 모달 */}
       {editingProductId !== null && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-2xl shadow-2xl max-w-sm w-full">

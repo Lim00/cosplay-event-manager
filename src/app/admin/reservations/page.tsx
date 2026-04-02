@@ -87,9 +87,28 @@ export default function ReservationsPage() {
       <div className="flex-1 bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
         <h2 className="text-2xl font-bold mb-6">📝 새 선입금 등록</h2>
         <form onSubmit={handleRegister} className="space-y-4">
-          <select value={selectedEventId} onChange={(e) => { setSelectedEventId(e.target.value ? Number(e.target.value) : ""); setCart([]); }} className="w-full p-3 border rounded-lg bg-gray-50 outline-none font-bold">
+          <select 
+            value={selectedEventId} 
+            onChange={(e) => { setSelectedEventId(e.target.value ? Number(e.target.value) : ""); setCart([]); }} 
+            className="w-full p-3 border rounded-lg bg-gray-50 outline-none font-bold"
+          >
             <option value="">-- 행사 선택 --</option>
-            {events?.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+            {events?.map(e => {
+              let prefix = "";
+              if (e.status === "OPEN") prefix = "🟢 [진행 중] ";
+              else if (e.status === "PREPARING") prefix = "🚧 [준비 중] ";
+              else if (e.status === "CLOSED") prefix = "🔒 [종료됨] ";
+
+              return (
+                <option 
+                  key={e.id} 
+                  value={e.id} 
+                  disabled={e.status === "CLOSED"} // 🌟 핵심: 브라우저가 알아서 회색 처리 & 선택 방지
+                >
+                  {prefix}{e.name}
+                </option>
+              );
+            })}
           </select>
           
           {selectedEventId && (
