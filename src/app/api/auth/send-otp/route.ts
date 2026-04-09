@@ -9,6 +9,7 @@ const resend = new Resend(process.env.RESEND_API_KEY);
 // (참고: Resend 무료 샌드박스에서는 본인 가입 이메일로만 발송 가능합니다)
 const WHITELIST = [
   "deltahotel93@gmail.com", // 본인 이메일로 수정해주세요!
+  "lemonsoda0807@naver.com"
   "tester@example.com"
 ];
 
