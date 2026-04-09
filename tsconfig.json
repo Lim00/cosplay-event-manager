@@ -38,6 +38,7 @@
     "src/types/**/*.ts" // <--- 이 줄이 없으면 추가해 주세요 (보통 **/*.ts 때문에 자동 포함됨)
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "prisma.config.ts"
   ]
 }
