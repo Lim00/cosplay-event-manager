@@ -8,7 +8,7 @@ import { db, Product, SalesLog } from "@/lib/db";
 import { resetDatabase } from "@/lib/seed";
 import ProductList from "@/components/ProductList";
 import RecentSales from "@/components/RecentSales";
-import SearchBar from "@/components/SearchBar"; 
+import SearchBar from "@/components/SearchBar";
 
 interface CartItem extends Product {
   cartQty: number;
@@ -18,7 +18,7 @@ function POSManager() {
   const { status } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
-  
+
   // URL에서 eventId 추출
   const eventIdParam = searchParams.get("eventId");
   const eventId = eventIdParam ? parseInt(eventIdParam, 10) : 0;
@@ -38,7 +38,7 @@ function POSManager() {
   // 검색어로 필터링 (이름 또는 번호 뒷자리)
   const filteredReservations = useMemo(() => {
     if (!pendingReservations) return [];
-    return pendingReservations.filter(r => 
+    return pendingReservations.filter(r =>
       r.customerName.includes(searchQuery) || r.phoneLast4.includes(searchQuery)
     );
   }, [pendingReservations, searchQuery]);
@@ -64,7 +64,7 @@ function POSManager() {
   const removeFromCart = (productId: number) => {
     setCart((prev) =>
       prev.map((item) => item.id === productId ? { ...item, cartQty: item.cartQty - 1 } : item)
-          .filter((item) => item.cartQty > 0)
+        .filter((item) => item.cartQty > 0)
     );
   };
 
@@ -87,7 +87,7 @@ function POSManager() {
         }
 
         const timestamp = new Date();
-        
+
         // 2. 결제 및 재고 차감 처리
         for (const item of cart) {
           // 🌟 핵심: 영수증에 이번 행사 ID(eventId)를 명확히 기록합니다!
@@ -98,7 +98,7 @@ function POSManager() {
             totalPrice: item.price * item.cartQty,
             paymentMethod: "CASH",
             timestamp: timestamp,
-            eventId: eventId, 
+            eventId: eventId,
           });
 
           for (const component of item.components) {
@@ -107,7 +107,7 @@ function POSManager() {
             const newStock = inventoryItem!.stock - deductQty;
 
             await db.inventory.update(component.itemId, { stock: newStock });
-            
+
             // 재고 변동 내역에도 행사 ID 기록
             await db.inventoryLogs.add({
               itemId: component.itemId,
@@ -122,7 +122,7 @@ function POSManager() {
       });
 
       alert("결제 완료!");
-      setCart([]); 
+      setCart([]);
     } catch (error: any) {
       alert(error.message || "결제 실패");
     }
@@ -161,7 +161,7 @@ function POSManager() {
   const handleExchangeRequest = async (log: SalesLog) => {
     const input = prompt(`몇 개를 파본 교환하시겠습니까? (최대: ${log.count}개)`);
     if (!input) return;
-    
+
     const exchangeQty = parseInt(input, 10);
     if (isNaN(exchangeQty) || exchangeQty <= 0 || exchangeQty > log.count) {
       return alert("잘못된 수량입니다.");
@@ -201,7 +201,7 @@ function POSManager() {
           if (invItem) {
             const deductQty = exchangeQty * component.qty;
             const newStock = invItem.stock - deductQty; // 정상품을 꺼내주므로 재고 감소(-)
-            
+
             await db.inventory.update(invItem.id!, { stock: newStock });
 
             await db.inventoryLogs.add({
@@ -232,7 +232,7 @@ function POSManager() {
 
     const input = prompt(`몇 개를 환불하시겠습니까? (최대: ${refundableQty}개)`);
     if (!input) return;
-    
+
     const refundQty = parseInt(input, 10);
     if (isNaN(refundQty) || refundQty <= 0 || refundQty > refundableQty) return;
 
@@ -300,13 +300,19 @@ function POSManager() {
         </div>
         <div className="flex gap-3 items-center">
           {/* 🌟 수령 버튼 추가 */}
-          <button 
-            onClick={() => setIsPickupModalOpen(true)} 
+          <button
+            onClick={() => setIsPickupModalOpen(true)}
             className="px-4 py-2 bg-purple-600 text-white text-sm font-bold rounded-lg hover:bg-purple-700 shadow flex items-center gap-2"
           >
             📦 선입금 픽업 <span className="bg-purple-800 px-1.5 py-0.5 rounded-full text-xs">{pendingReservations?.length || 0}</span>
           </button>
-          <button onClick={resetDatabase} className="px-3 py-2 bg-gray-700 text-xs rounded hover:bg-gray-600">DB 리셋</button>
+          <button
+            disabled // 🌟 비활성화 속성 추가
+            onClick={resetDatabase}
+            className="px-3 py-2 bg-gray-200 text-gray-400 text-xs rounded cursor-not-allowed opacity-50" // 🌟 스타일 변경
+          >
+            DB 리셋 (비활성)
+          </button>
         </div>
       </header>
 
@@ -338,7 +344,7 @@ function POSManager() {
               ))}
             </div>
             <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-              <button 
+              <button
                 onClick={handleCheckout} disabled={cart.length === 0}
                 className={`w-full py-3 rounded-lg font-bold text-white transition-all ${cart.length === 0 ? "bg-gray-300" : "bg-blue-600 hover:bg-blue-700 active:scale-95"}`}
               >
@@ -351,58 +357,58 @@ function POSManager() {
             <div className="p-2 bg-gray-200 text-gray-600 text-xs font-bold uppercase shrink-0">Recent Activity</div>
             <div className="flex-1 overflow-y-auto p-2">
               {/* 자식 컴포넌트에게 eventId를 넘겨줍니다! */}
-              <RecentSales 
-                eventId={eventId} 
-                onRefundClick={handleRefundRequest} 
-                onExchangeClick={handleExchangeRequest} 
+              <RecentSales
+                eventId={eventId}
+                onRefundClick={handleRefundRequest}
+                onExchangeClick={handleExchangeRequest}
               />
             </div>
           </div>
         </aside>
         {isPickupModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col h-[80vh] shadow-2xl overflow-hidden">
-            <div className="p-6 bg-gray-50 border-b flex justify-between items-center shrink-0">
-              <h2 className="text-2xl font-bold text-gray-800">📦 선입금 예약 수령</h2>
-              <button onClick={() => setIsPickupModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
-            </div>
-            
-            <div className="p-6 shrink-0 border-b border-gray-100">
-              {/* 🌟 재사용 가능한 SearchBar 등장! */}
-              <SearchBar 
-                value={searchQuery} 
-                onChange={setSearchQuery} 
-                placeholder="예약자 이름이나 번호 뒷자리(예: 1234)를 입력하세요..." 
-              />
-            </div>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl w-full max-w-2xl flex flex-col h-[80vh] shadow-2xl overflow-hidden">
+              <div className="p-6 bg-gray-50 border-b flex justify-between items-center shrink-0">
+                <h2 className="text-2xl font-bold text-gray-800">📦 선입금 예약 수령</h2>
+                <button onClick={() => setIsPickupModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">✕</button>
+              </div>
 
-            <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-3">
-              {filteredReservations?.length === 0 ? (
-                <div className="text-center text-gray-400 py-10 font-bold">대기 중인 예약 내역이 없습니다.</div>
-              ) : (
-                filteredReservations?.map(r => (
-                  <div key={r.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm">
-                    <div>
-                      <div className="text-lg font-black text-gray-800 mb-1">
-                        {r.customerName} <span className="text-sm font-bold text-gray-400 ml-1">({r.phoneLast4})</span>
+              <div className="p-6 shrink-0 border-b border-gray-100">
+                {/* 🌟 재사용 가능한 SearchBar 등장! */}
+                <SearchBar
+                  value={searchQuery}
+                  onChange={setSearchQuery}
+                  placeholder="예약자 이름이나 번호 뒷자리(예: 1234)를 입력하세요..."
+                />
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 bg-gray-50 space-y-3">
+                {filteredReservations?.length === 0 ? (
+                  <div className="text-center text-gray-400 py-10 font-bold">대기 중인 예약 내역이 없습니다.</div>
+                ) : (
+                  filteredReservations?.map(r => (
+                    <div key={r.id} className="bg-white p-4 rounded-xl border border-gray-200 flex justify-between items-center shadow-sm">
+                      <div>
+                        <div className="text-lg font-black text-gray-800 mb-1">
+                          {r.customerName} <span className="text-sm font-bold text-gray-400 ml-1">({r.phoneLast4})</span>
+                        </div>
+                        <div className="text-sm text-gray-500 font-bold">
+                          {r.items.map(i => `${i.name} ${i.qty}개`).join(" + ")}
+                        </div>
                       </div>
-                      <div className="text-sm text-gray-500 font-bold">
-                        {r.items.map(i => `${i.name} ${i.qty}개`).join(" + ")}
-                      </div>
+                      <button
+                        onClick={() => handlePickup(r)}
+                        className="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
+                      >
+                        수령 완료
+                      </button>
                     </div>
-                    <button 
-                      onClick={() => handlePickup(r)}
-                      className="px-6 py-3 bg-purple-600 text-white font-bold rounded-lg hover:bg-purple-700 transition-colors shadow-md"
-                    >
-                      수령 완료
-                    </button>
-                  </div>
-                ))
-              )}
+                  ))
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
       </main>
     </div>
   );
