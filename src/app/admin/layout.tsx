@@ -10,36 +10,36 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         <div className="p-6 text-xl font-black tracking-wider border-b border-gray-800 flex items-center gap-3">
           <span>⚙️</span> Admin Hub
         </div>
-        
+
         {/* 네비게이션 메뉴 */}
         <nav className="flex-1 p-4 space-y-2">
-          <Link 
-            href="/admin/events" 
+          <Link
+            href="/admin/events"
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
           >
             행사 관리
           </Link>
           <Link href="/admin/reservations" className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white">
-            📝 선입금 예약 관리
+            선입금 예약 관리
           </Link>
-          <Link 
-            href="/admin/inventory" 
+          <Link
+            href="/admin/inventory"
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
           >
             재고 관리
           </Link>
-          <Link 
-            href="/admin/analytics" 
+          <Link
+            href="/admin/analytics"
             className="block p-3 rounded-lg hover:bg-gray-800 transition-colors font-bold text-gray-300 hover:text-white"
           >
-            📊 정산 및 통계
+            정산 및 통계
           </Link>
         </nav>
 
         {/* 하단 메인으로 나가기 */}
         <div className="p-4 border-t border-gray-800">
-          <Link 
-            href="/" 
+          <Link
+            href="/"
             className="flex items-center justify-center p-3 bg-gray-800 rounded-lg hover:bg-gray-700 font-bold text-sm text-gray-300 transition-colors"
           >
             ← 메인 화면으로
